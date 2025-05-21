@@ -88,7 +88,7 @@
       </div>
     </div>
     <div
-      class="absolute bottom-4 right-4 bg-black bg-opacity-80 px-4 py-2 rounded shadow flex gap-4 items-center z-10 bg-white w-1/4 h-1/2 overflow-y-auto"
+      class="absolute bottom-4 right-4 bg-black bg-opacity-80 px-4 py-2 rounded shadow flex gap-4 items-center z-10 bg-white w-1/4 h-1/2 overflow-y-auto justify-center"
     >
       <ul class="space-y-3 h-full overflow-y-auto">
         <li
