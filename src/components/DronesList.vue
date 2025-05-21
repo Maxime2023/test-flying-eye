@@ -1,6 +1,6 @@
 <template>
   <div class="h-full flex flex-col">
-    <h1 class="text-2xl font-bold mb-4 text-gray-700">Drones Available</h1>
+    <h1 class="text-2xl font-bold mb-4">Drones Available</h1>
     <div class="flex items-center gap-2 mb-4 py-4">
       <input
         v-model.number="searchLimit"

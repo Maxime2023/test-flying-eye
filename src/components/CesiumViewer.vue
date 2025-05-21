@@ -110,7 +110,7 @@ import * as Cesium from "cesium";
 import flightData from "@/assets/data/flightData.json";
 
 Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
-const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
+
 export default {
   data() {
     return {
@@ -123,9 +123,12 @@ export default {
     };
   },
   async mounted() {
-    // Initialise la viewer Cesium
+    // Initialise le terrainProvider ici
+    this.terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
+
+    // Initialise le viewer en utilisant le terrainProvider récupéré
     this.viewer = new Cesium.Viewer("cesiumContainer", {
-      terrainProvider,
+      terrainProvider: this.terrainProvider,
       baseLayerPicker: false,
       timeline: false,
       animation: false,
@@ -177,7 +180,7 @@ export default {
 
       // Récupère la hauteur terrain la plus précise pour chaque point
       const updatedPositions = await Cesium.sampleTerrainMostDetailed(
-        terrainProvider,
+        this.terrainProvider,
         cartographics
       );
 
@@ -217,7 +220,7 @@ export default {
       // Obtenir la hauteur du terrain à cette position
       const cartographic = Cesium.Cartographic.fromDegrees(longitude, latitude);
       const updatedPositions = await Cesium.sampleTerrainMostDetailed(
-        terrainProvider,
+        this.terrainProvider,
         [cartographic]
       );
 
