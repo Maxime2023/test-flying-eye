@@ -88,22 +88,56 @@
       </div>
     </div>
     <div
-      class="absolute bottom-4 right-4 bg-black bg-opacity-80 px-4 py-2 rounded shadow flex gap-4 items-center z-10 bg-white"
+      class="absolute bottom-4 right-4 bg-black bg-opacity-80 px-4 py-2 rounded shadow flex gap-4 items-center z-10 bg-white w-1/4 h-1/2 overflow-y-auto"
     >
-      <ul>
-        <li v-for="(step, index) in flightSteps" :key="step.timestamp">
-          <a
-            href="#"
-            @click.prevent="goToStep(index)"
-            :class="[
-              'text-gray-700 cursor-pointer rounded px-2 py-1',
-              index === currentIndex
-                ? 'bg-blue-500 text-white'
-                : 'hover:bg-gray-200',
-            ]"
-          >
-            {{ step.timestamp }}
-          </a>
+      <ul class="space-y-3 h-full overflow-y-auto">
+        <li
+          v-for="(step, index) in flightSteps"
+          :key="step.timestamp"
+          @click.prevent="goToStep(index)"
+          :class="[
+            'cursor-pointer rounded-lg shadow-md p-4 transition-colors duration-200',
+            index === currentIndex
+              ? 'bg-blue-600 text-white shadow-blue-500'
+              : 'bg-white hover:bg-gray-100 text-gray-800',
+          ]"
+        >
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-semibold text-lg">
+              {{ formatTimestamp(step.timestamp) }}
+            </span>
+            <span
+              class="text-xs font-medium rounded-full px-2 py-0.5 bg-blue-400 text-white"
+            >
+              Step {{ index + 1 }}
+            </span>
+          </div>
+          <div class="text-sm space-x-4 flex flex-wrap gap-2">
+            <div>
+              <strong>Height:</strong>
+              {{ step.data.height?.toFixed(1) ?? "-" }} m
+            </div>
+            <div>
+              <strong>Battery:</strong>
+              {{ step.data.battery?.capacity_percent ?? "-" }}%
+            </div>
+            <div>
+              <strong>Speed:</strong>
+              {{ step.data.horizontal_speed?.toFixed(1) ?? "-" }} m/s
+            </div>
+            <div>
+              <strong>Pitch:</strong>
+              {{ step.data.attitude_pitch?.toFixed(1) ?? "-" }}°
+            </div>
+            <div>
+              <strong>Roll:</strong>
+              {{ step.data.attitude_roll?.toFixed(1) ?? "-" }}°
+            </div>
+            <div>
+              <strong>Heading:</strong>
+              {{ step.data.attitude_head?.toFixed(1) ?? "-" }}°
+            </div>
+          </div>
         </li>
       </ul>
     </div>
@@ -128,10 +162,8 @@ export default {
     };
   },
   async mounted() {
-    // Initialise le terrainProvider ici
     this.terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
 
-    // Initialise le viewer en utilisant le terrainProvider récupéré
     this.viewer = new Cesium.Viewer("cesiumContainer", {
       terrainProvider: this.terrainProvider,
       baseLayerPicker: false,
@@ -139,23 +171,21 @@ export default {
       animation: false,
       fullscreenButton: false,
     });
-    // Transforme ton JSON en flightSteps
+
     const flightRecordsObj = flightData.flight_records;
     this.flightSteps = Object.entries(flightRecordsObj)
       .map(([timestamp, data]) => ({ timestamp, data }))
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // Affiche la trajectoire complète
     await this.showFlightPath();
+    await this.addVerticalLines();
 
-    // Crée l'entité drone (exemple simple : un point avec orientation)
     this.droneEntity = this.viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
       point: { pixelSize: 10, color: Cesium.Color.BLUE },
       orientation: Cesium.Quaternion.IDENTITY,
     });
 
-    // Affiche la première étape
     this.updateDronePosition();
   },
   methods: {
@@ -178,18 +208,15 @@ export default {
       );
     },
     async showFlightPath() {
-      // Crée un tableau Cartographique des positions sans hauteur initiale
       const cartographics = this.flightSteps.map((step) =>
         Cesium.Cartographic.fromDegrees(step.data.longitude, step.data.latitude)
       );
 
-      // Récupère la hauteur terrain la plus précise pour chaque point
       const updatedPositions = await Cesium.sampleTerrainMostDetailed(
         this.terrainProvider,
         cartographics
       );
 
-      // Compose la liste des positions avec altitude ajustée (terrain + hauteur drone)
       const positions = updatedPositions.map((pos, i) => {
         const groundHeight = pos.height ?? 0;
         const droneHeight = this.flightSteps[i].data.height ?? 0;
@@ -200,27 +227,21 @@ export default {
         );
       });
 
-      // Ajoute une entité polyline représentant la trajectoire
       const flightPathEntity = this.viewer.entities.add({
         name: "Flight Path",
         polyline: {
           positions: positions,
           width: 3,
-          material: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.WHITE,
-            dashPattern: 255,
-          }),
+          material: new Cesium.PolylineArrowMaterialProperty(
+            Cesium.Color.WHITE
+          ),
           clampToGround: false,
         },
       });
 
-      // Centre la caméra uniquement sur la trajectoire
       await this.viewer.flyTo(flightPathEntity);
-
-      // Centre la caméra sur la trajectoire
     },
     drawAxes(position, orientation) {
-      // Supprime toutes les anciennes entités axes
       if (this.axesEntities) {
         this.axesEntities.forEach((entity) => {
           this.viewer.entities.remove(entity);
@@ -237,7 +258,6 @@ export default {
         new Cesium.Cartesian3(1, 1, 1)
       );
 
-      // X axis (rouge)
       this.axesEntities.push(
         this.viewer.entities.add({
           polyline: {
@@ -255,7 +275,6 @@ export default {
         })
       );
 
-      // Y axis (vert)
       this.axesEntities.push(
         this.viewer.entities.add({
           polyline: {
@@ -273,7 +292,6 @@ export default {
         })
       );
 
-      // Z axis (bleu)
       this.axesEntities.push(
         this.viewer.entities.add({
           polyline: {
@@ -292,27 +310,99 @@ export default {
       );
     },
 
+    async addVerticalLines() {
+      // Remove previous vertical lines and labels if any
+      if (this.verticalLineEntities) {
+        this.verticalLineEntities.forEach((entity) =>
+          this.viewer.entities.remove(entity)
+        );
+      }
+      if (this.labelEntities) {
+        this.labelEntities.forEach((entity) =>
+          this.viewer.entities.remove(entity)
+        );
+      }
+
+      this.verticalLineEntities = [];
+      this.labelEntities = [];
+
+      for (let i = 0; i < this.flightSteps.length; i++) {
+        const step = this.flightSteps[i];
+        const { longitude, latitude, height: droneHeight } = step.data;
+
+        const cartographic = Cesium.Cartographic.fromDegrees(
+          longitude,
+          latitude
+        );
+        const updatedPositions = await Cesium.sampleTerrainMostDetailed(
+          this.terrainProvider,
+          [cartographic]
+        );
+        const groundHeight = updatedPositions[0]?.height ?? 0;
+
+        const dronePosition = Cesium.Cartesian3.fromDegrees(
+          longitude,
+          latitude,
+          groundHeight + (droneHeight ?? 0)
+        );
+        const groundPosition = Cesium.Cartesian3.fromDegrees(
+          longitude,
+          latitude,
+          groundHeight
+        );
+
+        // Add vertical line (arrow material if you want)
+        const verticalLineEntity = this.viewer.entities.add({
+          polyline: {
+            positions: [groundPosition, dronePosition],
+            width: 4,
+            material: new Cesium.PolylineDashMaterialProperty({
+              color: Cesium.Color.WHITE,
+              dashPattern: 255,
+            }),
+          },
+        });
+        this.verticalLineEntities.push(verticalLineEntity);
+
+        const labelPosition = Cesium.Cartesian3.fromDegrees(
+          longitude,
+          latitude,
+          groundHeight + (droneHeight ?? 0) + 5
+        );
+
+        const labelEntity = this.viewer.entities.add({
+          position: labelPosition,
+          label: {
+            text: `${i + 1}`, // Label text as 1, 2, 3...
+            font: "16px sans-serif",
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            heightReference: Cesium.HeightReference.NONE,
+          },
+        });
+        this.labelEntities.push(labelEntity);
+      }
+    },
+    formatTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    },
     createFrustum(position, orientation) {
       if (this.frustumEntity) {
         this.viewer.entities.remove(this.frustumEntity);
       }
 
-      // Dessine les axes pour debug orientation
       this.drawAxes(position, orientation);
-
-      this.frustumEntity = this.viewer.entities.add({
-        position: position,
-        orientation: Cesium.Quaternion.IDENTITY,
-        cone: {
-          length: 200,
-          topRadius: 0.1,
-          bottomRadius: 200 * Math.tan(Cesium.Math.toRadians(30)),
-          material: Cesium.Color.YELLOW.withAlpha(0.8),
-          outline: true,
-          outlineColor: Cesium.Color.ORANGE,
-        },
-        heightReference: Cesium.HeightReference.NONE,
-      });
     },
 
     async updateDronePosition() {
@@ -347,7 +437,6 @@ export default {
       this.droneEntity.position = position;
       this.droneEntity.orientation = orientation;
 
-      // Add/update frustum visualization
       this.createFrustum(position, orientation);
     },
 
@@ -361,6 +450,12 @@ export default {
     },
     play() {
       if (this.playing) return;
+
+      if (this.currentIndex >= this.flightSteps.length - 1) {
+        this.currentIndex = 0;
+        this.updateDronePosition();
+      }
+
       this.playing = true;
       this.intervalId = setInterval(() => {
         if (this.currentIndex < this.flightSteps.length - 1) {
@@ -371,6 +466,7 @@ export default {
         }
       }, 1000);
     },
+
     pause() {
       this.playing = false;
       clearInterval(this.intervalId);
