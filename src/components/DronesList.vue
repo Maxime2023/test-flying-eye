@@ -1,36 +1,32 @@
 <template>
-  <div class="h-full flex flex-col">
-    <h1 class="text-2xl font-bold mb-4">Drones Available</h1>
-    <div class="flex items-center gap-2 mb-4 py-4">
+  <div class="h-full flex flex-col p-4">
+    <h1 class="text-2xl font-bold mb-4 pb-4 text-gray-500">Drones Available</h1>
+
+    <div class="flex items-center gap-2 mb-4 pb-4">
       <input
-        v-model.number="searchLimit"
-        class="border border-gray-300 rounded px-3 py-1 w-2/3"
-        placeholder="Nombre"
+        v-model="searchQuery"
+        type="text"
+        placeholder="Search by sit_name..."
+        class="border border-gray-300 rounded px-3 py-2 w-full text-gray-500"
       />
-      <button
-        @click="fetchDrones"
-        class="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600 w-1/3"
-      >
-        Search
-      </button>
     </div>
 
     <div class="flex-1 overflow-y-auto">
-      <div v-if="loading" class="text-gray-500">Loading...</div>
-      <div v-else class="grid grid-cols-1 gap-4 pb-4">
+      <div v-if="filteredDrones.length === 0" class="text-gray-500">
+        No drones found.
+      </div>
+      <div v-else class="grid grid-cols-1 gap-4">
         <div
-          v-for="cat in cats"
-          :key="cat.id"
-          class="rounded-xl shadow-md overflow-hidden"
+          v-for="drone in filteredDrones"
+          :key="drone.dev_id"
+          class="rounded-xl shadow-md border border-gray-200 bg-white p-4"
         >
-          <img
-            :src="cat.url"
-            :alt="'Chat ' + cat.id"
-            class="w-full h-60 object-cover"
-          />
-          <div class="p-2">
-            <p class="text-sm text-gray-700">ID: {{ cat.id }}</p>
-          </div>
+          <h2 class="text-lg font-semibold text-blue-600">
+            {{ drone.dev_name }}
+          </h2>
+          <p class="text-sm text-gray-600">Serial: {{ drone.dev_sn }}</p>
+          <p class="text-sm text-gray-600">Site: {{ drone.sit_name }}</p>
+          <p class="text-sm text-gray-600">Details: {{ drone.det_text }}</p>
         </div>
       </div>
     </div>
@@ -38,26 +34,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed } from "vue";
+import droneData from "@/assets/data/dronesList.json";
 
-const cats = ref([]);
-const loading = ref(true);
-const searchLimit = ref(9); // default limit
+const drones = ref(droneData);
+const searchQuery = ref("");
 
-const fetchDrones = async () => {
-  loading.value = true;
-  try {
-    const res = await fetch(
-      `https://api.thecatapi.com/v1/images/search?limit=${searchLimit.value}`
-    );
-    const data = await res.json();
-    cats.value = data;
-  } catch (error) {
-    console.error("Error :", error);
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(fetchDrones);
+const filteredDrones = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  return drones.value.filter((d) => d.sit_name.toLowerCase().includes(query));
+});
 </script>
