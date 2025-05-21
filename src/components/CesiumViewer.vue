@@ -122,7 +122,7 @@ export default {
       droneEntity: null,
     };
   },
-  mounted() {
+  async mounted() {
     // Initialise la viewer Cesium
     this.viewer = new Cesium.Viewer("cesiumContainer", {
       terrainProvider,
@@ -131,19 +131,20 @@ export default {
       animation: false,
       fullscreenButton: false,
     });
-
     // Transforme ton JSON en flightSteps
     const flightRecordsObj = flightData.flight_records;
     this.flightSteps = Object.entries(flightRecordsObj)
       .map(([timestamp, data]) => ({ timestamp, data }))
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
+    // Affiche la trajectoire complète
+    await this.showFlightPath();
+
     // Crée l'entité drone (exemple simple : un point avec orientation)
     this.droneEntity = this.viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
-      point: { pixelSize: 10, color: Cesium.Color.RED },
+      point: { pixelSize: 10, color: Cesium.Color.BLUE },
       orientation: Cesium.Quaternion.IDENTITY,
-      // Pour le cône, on peut ajouter une autre entité ou primitive liée
     });
 
     // Affiche la première étape
@@ -168,15 +169,65 @@ export default {
         hpr
       );
     },
-    updateDronePosition() {
+    async showFlightPath() {
+      // Crée un tableau Cartographique des positions sans hauteur initiale
+      const cartographics = this.flightSteps.map((step) =>
+        Cesium.Cartographic.fromDegrees(step.data.longitude, step.data.latitude)
+      );
+
+      // Récupère la hauteur terrain la plus précise pour chaque point
+      const updatedPositions = await Cesium.sampleTerrainMostDetailed(
+        terrainProvider,
+        cartographics
+      );
+
+      // Compose la liste des positions avec altitude ajustée (terrain + hauteur drone)
+      const positions = updatedPositions.map((pos, i) => {
+        const groundHeight = pos.height ?? 0;
+        const droneHeight = this.flightSteps[i].data.height ?? 0;
+        return Cesium.Cartesian3.fromDegrees(
+          Cesium.Math.toDegrees(pos.longitude),
+          Cesium.Math.toDegrees(pos.latitude),
+          groundHeight + droneHeight
+        );
+      });
+
+      // Ajoute une entité polyline représentant la trajectoire
+      this.viewer.entities.add({
+        name: "Flight Path",
+        polyline: {
+          positions: positions,
+          width: 3,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.WHITE,
+            dashPattern: 255, // valeur par défaut, tu peux ajuster
+          }),
+          clampToGround: false,
+        },
+      });
+
+      // Centre la caméra sur la trajectoire
+      this.viewer.zoomTo(this.viewer.entities);
+    },
+    async updateDronePosition() {
       const step = this.flightSteps[this.currentIndex];
-      const { latitude, longitude, height } = step.data;
+      const { latitude, longitude, height: droneHeight } = step.data;
       const { attitude_head, attitude_pitch, attitude_roll } = step.data;
+
+      // Obtenir la hauteur du terrain à cette position
+      const cartographic = Cesium.Cartographic.fromDegrees(longitude, latitude);
+      const updatedPositions = await Cesium.sampleTerrainMostDetailed(
+        terrainProvider,
+        [cartographic]
+      );
+
+      const groundHeight = updatedPositions[0]?.height ?? 0;
+      const trueHeight = groundHeight + (droneHeight ?? 0);
 
       const position = Cesium.Cartesian3.fromDegrees(
         longitude,
         latitude,
-        height
+        trueHeight
       );
       const orientation = this.headingPitchRollToQuaternion(
         attitude_head,
@@ -184,14 +235,11 @@ export default {
         attitude_roll,
         longitude,
         latitude,
-        height
+        trueHeight
       );
 
       this.droneEntity.position = position;
       this.droneEntity.orientation = orientation;
-
-      // Centrer la caméra sur le drone
-      this.viewer.camera.flyTo({ destination: position });
     },
     prevStep() {
       if (this.currentIndex > 0) this.currentIndex--;
