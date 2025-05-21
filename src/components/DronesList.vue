@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full flex flex-col p-4">
+  <div class="h-full flex flex-col">
     <h1 class="text-2xl font-bold mb-4 pb-4 text-gray-500">Drones Available</h1>
 
     <div class="flex items-center gap-2 mb-4 pb-4">

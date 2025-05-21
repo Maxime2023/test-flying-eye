@@ -95,7 +95,12 @@
           <a
             href="#"
             @click.prevent="goToStep(index)"
-            class="text-gray-700 cursor-pointer hover:bg-gray-200 rounded px-2 py-1"
+            :class="[
+              'text-gray-700 cursor-pointer rounded px-2 py-1',
+              index === currentIndex
+                ? 'bg-blue-500 text-white'
+                : 'hover:bg-gray-200',
+            ]"
           >
             {{ step.timestamp }}
           </a>
@@ -196,28 +201,125 @@ export default {
       });
 
       // Ajoute une entité polyline représentant la trajectoire
-      this.viewer.entities.add({
+      const flightPathEntity = this.viewer.entities.add({
         name: "Flight Path",
         polyline: {
           positions: positions,
           width: 3,
           material: new Cesium.PolylineDashMaterialProperty({
             color: Cesium.Color.WHITE,
-            dashPattern: 255, // valeur par défaut, tu peux ajuster
+            dashPattern: 255,
           }),
           clampToGround: false,
         },
       });
 
+      // Centre la caméra uniquement sur la trajectoire
+      await this.viewer.flyTo(flightPathEntity);
+
       // Centre la caméra sur la trajectoire
-      this.viewer.zoomTo(this.viewer.entities);
     },
+    drawAxes(position, orientation) {
+      // Supprime toutes les anciennes entités axes
+      if (this.axesEntities) {
+        this.axesEntities.forEach((entity) => {
+          this.viewer.entities.remove(entity);
+        });
+      }
+      this.axesEntities = []; // reset tableau
+
+      const length = 50;
+      const origin = position;
+
+      const transform = Cesium.Matrix4.fromTranslationQuaternionRotationScale(
+        origin,
+        orientation,
+        new Cesium.Cartesian3(1, 1, 1)
+      );
+
+      // X axis (rouge)
+      this.axesEntities.push(
+        this.viewer.entities.add({
+          polyline: {
+            positions: [
+              origin,
+              Cesium.Matrix4.multiplyByPoint(
+                transform,
+                new Cesium.Cartesian3(length, 0, 0),
+                new Cesium.Cartesian3()
+              ),
+            ],
+            width: 3,
+            material: Cesium.Color.RED,
+          },
+        })
+      );
+
+      // Y axis (vert)
+      this.axesEntities.push(
+        this.viewer.entities.add({
+          polyline: {
+            positions: [
+              origin,
+              Cesium.Matrix4.multiplyByPoint(
+                transform,
+                new Cesium.Cartesian3(0, length, 0),
+                new Cesium.Cartesian3()
+              ),
+            ],
+            width: 3,
+            material: Cesium.Color.GREEN,
+          },
+        })
+      );
+
+      // Z axis (bleu)
+      this.axesEntities.push(
+        this.viewer.entities.add({
+          polyline: {
+            positions: [
+              origin,
+              Cesium.Matrix4.multiplyByPoint(
+                transform,
+                new Cesium.Cartesian3(0, 0, length),
+                new Cesium.Cartesian3()
+              ),
+            ],
+            width: 3,
+            material: Cesium.Color.BLUE,
+          },
+        })
+      );
+    },
+
+    createFrustum(position, orientation) {
+      if (this.frustumEntity) {
+        this.viewer.entities.remove(this.frustumEntity);
+      }
+
+      // Dessine les axes pour debug orientation
+      this.drawAxes(position, orientation);
+
+      this.frustumEntity = this.viewer.entities.add({
+        position: position,
+        orientation: Cesium.Quaternion.IDENTITY,
+        cone: {
+          length: 200,
+          topRadius: 0.1,
+          bottomRadius: 200 * Math.tan(Cesium.Math.toRadians(30)),
+          material: Cesium.Color.YELLOW.withAlpha(0.8),
+          outline: true,
+          outlineColor: Cesium.Color.ORANGE,
+        },
+        heightReference: Cesium.HeightReference.NONE,
+      });
+    },
+
     async updateDronePosition() {
       const step = this.flightSteps[this.currentIndex];
       const { latitude, longitude, height: droneHeight } = step.data;
       const { attitude_head, attitude_pitch, attitude_roll } = step.data;
 
-      // Obtenir la hauteur du terrain à cette position
       const cartographic = Cesium.Cartographic.fromDegrees(longitude, latitude);
       const updatedPositions = await Cesium.sampleTerrainMostDetailed(
         this.terrainProvider,
@@ -232,6 +334,7 @@ export default {
         latitude,
         trueHeight
       );
+
       const orientation = this.headingPitchRollToQuaternion(
         attitude_head,
         attitude_pitch,
@@ -243,7 +346,11 @@ export default {
 
       this.droneEntity.position = position;
       this.droneEntity.orientation = orientation;
+
+      // Add/update frustum visualization
+      this.createFrustum(position, orientation);
     },
+
     prevStep() {
       if (this.currentIndex > 0) this.currentIndex--;
       this.updateDronePosition();
